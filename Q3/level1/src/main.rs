@@ -1,29 +1,60 @@
 use std::env;
 use std::io::{stdin, stdout, Write};
-use std::path::Path;
 use std::process::Command;
 
 fn main(){
     loop {
         print!("> ");
-        stdout().flush();
+        stdout().flush().unwrap();
 
         let mut input = String::new();
         stdin().read_line(&mut input).unwrap();
 
         let mut parts = input.trim().split_whitespace();
         let command = parts.next().unwrap();
-        let args = parts;
+        let mut args = parts;
 
         match command {
             "exit" => break,
             "cd" => {
-                let new_dir = args.peekable().peek().map_or("/", |x| *x);
-                let root = Path::new(new_dir);
-                if let Err(e) = env::set_current_dir(&root) {
-                    eprintln!("{}", e);
+                let target_dir = match args.next() {
+                    None | Some("~") => match home::home_dir() {
+                        Some(path) => path,
+                        None => {
+                            eprintln!("cd: 找不到主目录");
+                            continue;
+                        }
+                    },
+                    Some(path) => {
+                        if path.starts_with('~') {
+                            let home_dir = match home::home_dir() {
+                                Some(path) => path,
+                                None => {
+                                    eprintln!("cd: 找不到主目录");
+                                    continue;
+                                }
+                            };
+                            home_dir.join(&path[2..])
+                        } else {
+                            std::path::PathBuf::from(path)
+                        }
+                    }
+                };
+
+                if let Err(e) = env::set_current_dir(&target_dir) {
+                    eprintln!("cd: {}: {}", target_dir.display(), e);
                 }
-            }
+            },
+            "pwd" => {
+                match env::current_dir() {
+                    Ok(path) => println!("{}", path.display()),
+                    Err(e) => eprintln!("pwd: 获取当前目录时错误: {}", e),
+                }
+            },
+            "echo" => {
+                let output = args.collect::<Vec<&str>>().join(" ");
+                println!("{}", output);
+            },
             _ => {
                 let child = Command::new(command)
                     .args(args)
@@ -34,7 +65,7 @@ fn main(){
                         let _ = child.wait();
                     },
                     Err(e) => {
-                        eprintln!("Command failed: {}", e);
+                        eprintln!("执行指令错误: {}", e);
                     }
                 }
             }
