@@ -13,6 +13,14 @@ fn main() {
             continue;
         }
 
+        // 使用临时占位符来避免替换冲突
+        // 简单替换的结果太难蚌了，直到大模型指出来之前我都没意识到这连在一起的两个也给替换了
+        let input = input
+            .replace(">>", "\u{E000}")
+            .replace(">", " > ")
+            .replace("<", " < ")
+            .replace("\u{E000}", " >> ");
+
         let first_command_str = input.trim().split('|').next().unwrap_or("").trim();
         let mut parts = first_command_str.split_whitespace();
         let command = parts.next().unwrap_or("");
@@ -50,11 +58,13 @@ fn main() {
 
         let mut commands = input.trim().split('|').peekable();
         let mut children: Vec<Child> = vec![];
-        let mut pipeline_failed = false; // 标记管道是否失败
+        let mut failed = false; // 标记管道是否失败
         
         while let Some(command_str) = commands.next() {
             
-            if pipeline_failed {
+            // 解析重定向和管道
+            
+            if failed {
                 children.clear();
                 break;
             }
@@ -64,50 +74,17 @@ fn main() {
                 Some(cmd) => cmd,
                 None => {
                     eprintln!("执行管道时错误: 出现空命令");
-                    pipeline_failed = true;
+                    failed = true;
                     continue;
                 }
             };
             
             // 将args改为动态数组
-            let mut args = Vec::new();
-            let mut stdin_file: Option<String> = None;
-            let mut stdout_file: Option<(String, bool)> = None; // (filename, is_append)
-
-            while let Some(part) = parts.next() {
-                match part {
-                    "<" => {
-                        if let Some(filename) = parts.next() {
-                            stdin_file = Some(filename.to_string());
-                        } else {
-                            eprintln!("语法错误: `<` 后缺少路径");
-                            pipeline_failed = true;
-                            break;
-                        }
-                    },
-                    ">" => {
-                        if let Some(filename) = parts.next() {
-                            stdout_file = Some((filename.to_string(), false));
-                        } else {
-                            eprintln!("语法错误: `>` 后缺少路径");
-                            pipeline_failed = true;
-                            break;
-                        }
-                    },
-                    ">>" => {
-                        if let Some(filename) = parts.next() {
-                            stdout_file = Some((filename.to_string(), true));
-                        } else {
-                            eprintln!("语法错误: `>>` 后缺少路径");
-                            pipeline_failed = true;
-                            break;
-                        }
-                    },
-                    _ => args.push(part.to_string()),
-                }
-            }
-
-            if pipeline_failed {
+            // 解析重定向符号
+            let (args, stdin_file, stdout_file, redirect_failed) = parse_redirections(&mut parts);
+            failed = redirect_failed;
+            
+            if failed {
                 continue;
             }
             
@@ -116,7 +93,7 @@ fn main() {
                     Ok(file) => Stdio::from(file),
                     Err(e) => {
                         eprintln!("无法打开输入文件 {}: {}", filename, e);
-                        pipeline_failed = true;
+                        failed = true;
                         continue;
                     }
                 }
@@ -136,7 +113,7 @@ fn main() {
                     Ok(file) => Stdio::from(file),
                     Err(e) => {
                         eprintln!("无法创建/打开输出文件 {}: {}", filename, e);
-                        pipeline_failed = true;
+                        failed = true;
                         continue;
                     }
                 }
@@ -158,7 +135,7 @@ fn main() {
                 }
                 Err(e) => {
                     eprintln!("执行指令错误: {}: {}", command, e);
-                    pipeline_failed = true;
+                    failed = true;
                     continue;
                 }
             }
@@ -170,4 +147,48 @@ fn main() {
             }
         }
     }
+}
+
+fn parse_redirections(parts: &mut dyn Iterator<Item=&str>) -> (Vec<String>,Option<String>, Option<(String, bool)>,bool) {
+    
+    // 解析重定向符号
+    
+    let mut args = Vec::new();
+    let mut stdin_file = None;
+    let mut stdout_file = None;
+    let mut redirect_failed = false;
+
+    while let Some(part) = parts.next() {
+        match part {
+            "<" => {
+                if let Some(filename) = parts.next() {
+                    stdin_file = Some(filename.to_string());
+                } else {
+                    eprintln!("语法错误: `<` 后缺少路径");
+                    redirect_failed = true;
+                    break;
+                }
+            },
+            ">" => {
+                if let Some(filename) = parts.next() {
+                    stdout_file = Some((filename.to_string(), false));
+                } else {
+                    eprintln!("语法错误: `>` 后缺少路径");
+                    redirect_failed = true;
+                    break;
+                }
+            },
+            ">>" => {
+                if let Some(filename) = parts.next() {
+                    stdout_file = Some((filename.to_string(), true));
+                } else {
+                    eprintln!("语法错误: `>>` 后缺少路径");
+                    redirect_failed = true;
+                    break;
+                }
+            },
+            _ => args.push(part.to_string()),
+        }
+    }
+    (args, stdin_file, stdout_file, redirect_failed)
 }
