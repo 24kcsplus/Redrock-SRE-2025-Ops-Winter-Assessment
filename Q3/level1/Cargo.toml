@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 home = "0.5"
 crossterm = "0.29"
-unicode-width = "0.1"
+unicode-width = "0.2"
+whoami = "1.6"

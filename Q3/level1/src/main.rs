@@ -1,6 +1,6 @@
-mod input;
+mod input_and_output;
 
-use crate::input::read_command_line;
+use crate::input_and_output::read_command_line;
 use std::env;
 use std::fs::{File, OpenOptions};
 use std::process::{Child, Command, Stdio};
