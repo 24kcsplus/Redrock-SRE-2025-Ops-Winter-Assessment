@@ -22,7 +22,7 @@ impl From<std::io::Error> for ReadLineError {
     }
 }
 
-pub fn read_command_line() -> Result<String, ReadLineError> {
+pub fn read_command_line(history: &[String]) -> Result<String, ReadLineError> {
 
     let mut stdout = stdout();
     terminal::enable_raw_mode()?;
@@ -30,6 +30,7 @@ pub fn read_command_line() -> Result<String, ReadLineError> {
     let mut buffer: Vec<char> = Vec::new();
     let mut position = 0; // 光标在缓冲区中的位置
     let username = whoami::username();
+    let mut history_index = history.len();
 
     loop {
 
@@ -72,6 +73,10 @@ pub fn read_command_line() -> Result<String, ReadLineError> {
                 KeyCode::Enter => {
                     break;
                 },
+                KeyCode::Char('l' | 'L') if modifiers.contains(KeyModifiers::CONTROL) => {
+                    execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0, 0))?;
+                    stdout.flush()?;
+                },
                 KeyCode::Char('c' | 'C') if modifiers.contains(KeyModifiers::CONTROL) => {
                     terminal::disable_raw_mode()?;
                     println!("^C");
@@ -94,6 +99,24 @@ pub fn read_command_line() -> Result<String, ReadLineError> {
                 KeyCode::Delete => {
                     if position < buffer.len() {
                         buffer.remove(position);
+                    }
+                },
+                KeyCode::Up => {
+                    if history_index > 0 {
+                        history_index -= 1;
+                        buffer = history[history_index].chars().collect();
+                        position = buffer.len();
+                    }
+                },
+                KeyCode::Down => {
+                    if history_index < history.len() {
+                        history_index += 1;
+                        if history_index == history.len() {
+                            buffer.clear();
+                        } else {
+                            buffer = history[history_index].chars().collect();
+                        }
+                        position = buffer.len();
                     }
                 },
                 KeyCode::Left => {
