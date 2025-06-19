@@ -1,5 +1,5 @@
 use std::env;
-use std::io::{Write, stdin, stdout};
+use std::io::{stdin, stdout, Write};
 use std::process::{Child, Command, Stdio};
 
 fn main() {
@@ -8,95 +8,98 @@ fn main() {
         stdout().flush().unwrap();
 
         let mut input = String::new();
-        stdin().read_line(&mut input).unwrap();
+        if stdin().read_line(&mut input).is_err() {
+            continue;
+        }
+
+        let first_command_str = input.trim().split('|').next().unwrap_or("").trim();
+        let mut parts = first_command_str.split_whitespace();
+        let command = parts.next().unwrap_or("");
+        let args: Vec<&str> = parts.collect();
+
+        match command {
+            "" => continue,
+            "exit" => return,
+            "cd" => {
+                let target_dir = match args.get(0) {
+                    None | Some(&"~") => home::home_dir(),
+                    Some(path) => {
+                        if path.starts_with("~/") {
+                            home::home_dir().map(|mut p| {
+                                p.push(&path[2..]);
+                                p
+                            })
+                        } else {
+                            Some(std::path::PathBuf::from(*path))
+                        }
+                    }
+                };
+
+                if let Some(dir) = target_dir {
+                    if let Err(e) = env::set_current_dir(&dir) {
+                        eprintln!("cd: {}: {}", dir.display(), e);
+                    }
+                } else {
+                    eprintln!("cd: 找不到主目录或路径无效");
+                }
+                continue;
+            }
+            _ => {}
+        }
 
         let mut commands = input.trim().split('|').peekable();
-        let mut previous_command = None;
+        let mut children: Vec<Child> = vec![];
 
-        while let Some(command) = commands.next() {
-            let mut parts = command.trim().split_whitespace();
-            let command= match parts.next() { 
+        while let Some(command_str) = commands.next() {
+            let mut parts = command_str.trim().split_whitespace();
+            let command = match parts.next() {
                 Some(cmd) => cmd,
                 None => {
-                    continue;
+                    eprintln!("执行管道时错误: 出现空命令");
+                    children.clear();
+                    break;
                 }
             };
-            let mut args = parts;
+            let args = parts;
 
-            match command {
-                "exit" => return,
-                "cd" => {
-                    let target_dir = match args.next() {
-                        None | Some("~") => match home::home_dir() {
-                            Some(path) => path,
-                            None => {
-                                eprintln!("cd: 找不到主目录");
-                                continue;
-                            }
-                        },
-                        Some(path) => {
-                            if path.starts_with('~') {
-                                let home_dir = match home::home_dir() {
-                                    Some(path) => path,
-                                    None => {
-                                        eprintln!("cd: 找不到主目录");
-                                        continue;
-                                    }
-                                };
-                                home_dir.join(&path[2..])
-                            } else {
-                                std::path::PathBuf::from(path)
-                            }
-                        }
-                    };
-
-                    if let Err(e) = env::set_current_dir(&target_dir) {
-                        eprintln!("cd: {}: {}", target_dir.display(), e);
-                    }
-                    previous_command = None
+            let stdin = if let Some(last_child) = children.last_mut() {
+                if let Some(stdout) = last_child.stdout.take() {
+                    Stdio::from(stdout)
+                } else {
+                    Stdio::inherit()
                 }
-                "pwd" => match env::current_dir() {
-                    Ok(path) => println!("{}", path.display()),
-                    Err(e) => eprintln!("pwd: 获取当前目录时错误: {}", e),
-                },
-                "echo" => {
-                    let output = args.collect::<Vec<&str>>().join(" ");
-                    println!("{}", output);
+            } else {
+                Stdio::inherit()
+            };
+
+            let stdout = if commands.peek().is_some() {
+                Stdio::piped()
+            } else {
+                Stdio::inherit()
+            };
+
+            let child_process = Command::new(command)
+                .args(args)
+                .stdin(stdin)
+                .stdout(stdout)
+                .spawn();
+
+            match child_process {
+                Ok(child) => {
+                    children.push(child);
                 }
-                _ => {
-                    let stdin = previous_command.take().map_or(Stdio::inherit(), |output: Child| {
-                        Stdio::from(output.stdout.unwrap())
-                    });
-
-                    let stdout = if commands.peek().is_some() {
-                        Stdio::piped()
-                    } else {
-                        Stdio::inherit()
-                    };
-
-                    let child = Command::new(command)
-                        .args(args)
-                        .stdin(stdin)
-                        .stdout(stdout)
-                        .spawn();
-
-                    match child {
-                        Ok(child) => {
-                            previous_command = Some(child);
-                        }
-                        Err(e) => {
-                            eprintln!("执行指令错误: {}", e);
-                            previous_command = None;
-                            break;
-                        }
-                    }
+                Err(e) => {
+                    eprintln!("执行指令错误: {}: {}", command, e);
+                    children.clear();
+                    break;
                 }
             }
         }
-            if let Some(mut final_command) = previous_command {
-                if let Err(e) = final_command.wait() {
-                    eprintln!("等待子进程时出错: {}", e);
-                }
+
+        for mut child in children {
+            if let Err(e) = child.wait() {
+                eprintln!("等待子进程时出错: {}", e);
             }
+        }
     }
 }
