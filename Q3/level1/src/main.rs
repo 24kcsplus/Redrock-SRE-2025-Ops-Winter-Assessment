@@ -11,11 +11,11 @@ fn main() {
 
     ctrlc::set_handler(|| {}).expect("设置 Ctrl-C 处理器时出错");
 
-    let mut history: Vec<String> = Vec::new();
+    let mut historys: Vec<String> = Vec::new();
 
     loop {
 
-        let input = match read_command_line(&history) {
+        let input = match read_command_line(&historys) {
             Ok(line) => {
                 if line.is_empty() {
                     continue;
@@ -36,7 +36,7 @@ fn main() {
             continue;
         }
 
-        history.push(input.clone());
+        historys.push(input.clone());
 
         // 使用临时占位符来避免替换冲突
         // 简单替换的结果太难蚌了，直到大模型指出来之前我都没意识到这连在一起的两个也给替换了

@@ -22,7 +22,7 @@ impl From<std::io::Error> for ReadLineError {
     }
 }
 
-pub fn read_command_line(history: &[String]) -> Result<String, ReadLineError> {
+pub fn read_command_line(historys: &[String]) -> Result<String, ReadLineError> {
 
     let mut stdout = stdout();
     terminal::enable_raw_mode()?;
@@ -30,7 +30,7 @@ pub fn read_command_line(history: &[String]) -> Result<String, ReadLineError> {
     let mut buffer: Vec<char> = Vec::new();
     let mut position = 0; // 光标在缓冲区中的位置
     let username = whoami::username();
-    let mut history_index = history.len();
+    let mut history_index = historys.len();
 
     loop {
 
@@ -104,17 +104,17 @@ pub fn read_command_line(history: &[String]) -> Result<String, ReadLineError> {
                 KeyCode::Up => {
                     if history_index > 0 {
                         history_index -= 1;
-                        buffer = history[history_index].chars().collect();
+                        buffer = historys[history_index].chars().collect();
                         position = buffer.len();
                     }
                 },
                 KeyCode::Down => {
-                    if history_index < history.len() {
+                    if history_index < historys.len() {
                         history_index += 1;
-                        if history_index == history.len() {
+                        if history_index == historys.len() {
                             buffer.clear();
                         } else {
-                            buffer = history[history_index].chars().collect();
+                            buffer = historys[history_index].chars().collect();
                         }
                         position = buffer.len();
                     }
