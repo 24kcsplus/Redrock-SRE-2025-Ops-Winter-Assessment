@@ -1,6 +1,6 @@
 use crossterm::{
     cursor,
-    event::{self, Event, KeyCode, KeyEvent},
+    event::{self, Event, KeyCode, KeyEvent,KeyModifiers},
     execute,
     terminal::{self, Clear, ClearType},
 };
@@ -8,7 +8,21 @@ use std::env;
 use std::io::{stdout, Write};
 use unicode_width::UnicodeWidthStr;
 
-pub fn read_command_line() -> std::io::Result<String> {
+// 定义一个自定义错误类型，以区分 I/O 错误和用户中断
+#[derive(Debug)]
+pub enum ReadLineError {
+    Io(std::io::Error),
+    Interrupted, // 代表 Ctrl+C
+}
+
+// 允许 `?` 运算符将 io::Error 自动转换为 ReadLineError::Io
+impl From<std::io::Error> for ReadLineError {
+    fn from(err: std::io::Error) -> ReadLineError {
+        ReadLineError::Io(err)
+    }
+}
+
+pub fn read_command_line() -> Result<String, ReadLineError> {
 
     let mut stdout = stdout();
     terminal::enable_raw_mode()?;
@@ -53,10 +67,19 @@ pub fn read_command_line() -> std::io::Result<String> {
         execute!(stdout, cursor::MoveToColumn(cursor_col as u16))?;
         stdout.flush()?;
 
-        if let Event::Key(KeyEvent { code, .. }) = event::read()? {
+        if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
             match code {
                 KeyCode::Enter => {
                     break;
+                },
+                KeyCode::Char('c' | 'C') if modifiers.contains(KeyModifiers::CONTROL) => {
+                    terminal::disable_raw_mode()?;
+                    println!("^C");
+                    return Err(ReadLineError::Interrupted);
+                },
+                KeyCode::Char('u' | 'U') if modifiers.contains(KeyModifiers::CONTROL) => {
+                    buffer.drain(0..position);
+                    position = 0;
                 },
                 KeyCode::Char(c) => {
                     buffer.insert(position, c);
