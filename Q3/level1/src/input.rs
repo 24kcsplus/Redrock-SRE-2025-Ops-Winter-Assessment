@@ -5,24 +5,32 @@ use crossterm::{
     execute,
     terminal::{self, Clear, ClearType},
 };
+use unicode_width::UnicodeWidthStr;
 
 pub fn read_command_line() -> std::io::Result<String> {
     let mut stdout = stdout();
     terminal::enable_raw_mode()?;
 
-    let mut buffer = String::new();
-    let mut position = 0; // 光标在 buffer 中的位置
+    let mut buffer: Vec<char> = Vec::new();
+    let mut position = 0; // 光标在缓冲区中的位置
 
     loop {
-        // 移动到行首，打印提示符和缓冲区内容
+        
+        let display_buffer: String = buffer.iter().collect();
+
+        // 计算光标位置前的字符串的显示宽度
+        let prefix_slice: String = buffer[..position].iter().collect();
+        let cursor_col = 2 + UnicodeWidthStr::width(prefix_slice.as_str());
+        
+        // 将光标移动到行首，打印提示符和缓冲区内容
         execute!(
             stdout,
             cursor::MoveToColumn(0),
             Clear(ClearType::CurrentLine),
         )?;
-        print!("> {}", buffer);
+        print!("> {}", display_buffer);
         // 将光标移动到正确的位置 ('> ' 占2个字符)
-        execute!(stdout, cursor::MoveToColumn(2 + position as u16))?;
+        execute!(stdout, cursor::MoveToColumn(cursor_col as u16))?;
         stdout.flush()?;
 
         if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
@@ -72,6 +80,6 @@ pub fn read_command_line() -> std::io::Result<String> {
     }
 
     terminal::disable_raw_mode()?;
-    println!(); // 确保下一个输出从新行开始
-    Ok(buffer)
+    println!();
+    Ok(buffer.into_iter().collect())
 }

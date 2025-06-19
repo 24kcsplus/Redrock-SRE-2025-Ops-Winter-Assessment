@@ -3,13 +3,10 @@ mod input;
 use crate::input::read_command_line;
 use std::env;
 use std::fs::{File, OpenOptions};
-use std::io::{stdout, Write};
 use std::process::{Child, Command, Stdio};
 
 fn main() {
     loop {
-        print!("> ");
-        stdout().flush().unwrap();
 
         let input = match read_command_line() {
             Ok(line) => {
