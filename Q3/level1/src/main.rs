@@ -1,6 +1,9 @@
+mod input;
+
+use crate::input::read_command_line;
 use std::env;
 use std::fs::{File, OpenOptions};
-use std::io::{stdin, stdout, Write};
+use std::io::{stdout, Write};
 use std::process::{Child, Command, Stdio};
 
 fn main() {
@@ -8,10 +11,18 @@ fn main() {
         print!("> ");
         stdout().flush().unwrap();
 
-        let mut input = String::new();
-        if stdin().read_line(&mut input).is_err() {
-            continue;
-        }
+        let input = match read_command_line() {
+            Ok(line) => {
+                if line.is_empty() {
+                    continue;
+                }
+                line
+            }
+            Err(e) => {
+                eprintln!("读取输入错误: {}", e);
+                break;
+            }
+        };
 
         // 使用临时占位符来避免替换冲突
         // 简单替换的结果太难蚌了，直到大模型指出来之前我都没意识到这连在一起的两个也给替换了
