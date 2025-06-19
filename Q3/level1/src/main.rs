@@ -1,20 +1,18 @@
 mod input_and_output;
 
 use crate::input_and_output::read_command_line;
+use ctrlc;
 use std::env;
 use std::fs::{File, OpenOptions};
 use std::os::unix::process::CommandExt;
 use std::process::{Child, Command, Stdio};
-use ctrlc;
 
 fn main() {
-
     ctrlc::set_handler(|| {}).expect("设置 Ctrl-C 处理器时出错");
 
     let mut historys: Vec<String> = Vec::new();
 
     loop {
-
         let input = match read_command_line(&historys) {
             Ok(line) => {
                 if line.is_empty() {
@@ -77,7 +75,7 @@ fn main() {
                     eprintln!("cd: 找不到主目录或路径无效");
                 }
                 continue;
-            },
+            }
             _ => {}
         }
 
@@ -87,7 +85,6 @@ fn main() {
 
         unsafe {
             while let Some(command_str) = commands.next() {
-
                 // 解析重定向和管道
 
                 if failed {
@@ -107,7 +104,8 @@ fn main() {
 
                 // 将args改为动态数组
                 // 解析重定向符号
-                let (args, stdin_file, stdout_file, redirect_failed) = parse_redirections(&mut parts);
+                let (args, stdin_file, stdout_file, redirect_failed) =
+                    parse_redirections(&mut parts);
                 failed = redirect_failed;
 
                 if failed {
@@ -124,7 +122,10 @@ fn main() {
                         }
                     }
                 } else if let Some(last_child) = children.last_mut() {
-                    last_child.stdout.take().map_or(Stdio::inherit(), Stdio::from)
+                    last_child
+                        .stdout
+                        .take()
+                        .map_or(Stdio::inherit(), Stdio::from)
                 } else {
                     Stdio::inherit()
                 };
@@ -180,10 +181,11 @@ fn main() {
     }
 }
 
-fn parse_redirections(parts: &mut dyn Iterator<Item=&str>) -> (Vec<String>,Option<String>, Option<(String, bool)>,bool) {
-    
+fn parse_redirections(
+    parts: &mut dyn Iterator<Item = &str>,
+) -> (Vec<String>, Option<String>, Option<(String, bool)>, bool) {
     // 解析重定向符号
-    
+
     let mut args = Vec::new();
     let mut stdin_file = None;
     let mut stdout_file = None;
@@ -199,7 +201,7 @@ fn parse_redirections(parts: &mut dyn Iterator<Item=&str>) -> (Vec<String>,Optio
                     redirect_failed = true;
                     break;
                 }
-            },
+            }
             ">" => {
                 if let Some(filename) = parts.next() {
                     stdout_file = Some((filename.to_string(), false));
@@ -208,7 +210,7 @@ fn parse_redirections(parts: &mut dyn Iterator<Item=&str>) -> (Vec<String>,Optio
                     redirect_failed = true;
                     break;
                 }
-            },
+            }
             ">>" => {
                 if let Some(filename) = parts.next() {
                     stdout_file = Some((filename.to_string(), true));
@@ -217,7 +219,7 @@ fn parse_redirections(parts: &mut dyn Iterator<Item=&str>) -> (Vec<String>,Optio
                     redirect_failed = true;
                     break;
                 }
-            },
+            }
             _ => args.push(part.to_string()),
         }
     }

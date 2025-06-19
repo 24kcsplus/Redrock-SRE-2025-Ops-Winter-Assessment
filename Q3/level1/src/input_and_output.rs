@@ -1,11 +1,11 @@
 use crossterm::{
     cursor,
-    event::{self, Event, KeyCode, KeyEvent,KeyModifiers},
+    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
     execute,
     terminal::{self, Clear, ClearType},
 };
 use std::env;
-use std::io::{stdout, Write};
+use std::io::{Write, stdout};
 use unicode_width::UnicodeWidthStr;
 
 // 定义一个自定义错误类型，以区分 I/O 错误和用户中断
@@ -23,7 +23,6 @@ impl From<std::io::Error> for ReadLineError {
 }
 
 pub fn read_command_line(historys: &[String]) -> Result<String, ReadLineError> {
-
     let mut stdout = stdout();
     terminal::enable_raw_mode()?;
 
@@ -33,7 +32,6 @@ pub fn read_command_line(historys: &[String]) -> Result<String, ReadLineError> {
     let mut history_index = historys.len();
 
     loop {
-
         let current_dir = env::current_dir().unwrap_or_default();
         let path_str = current_dir.to_string_lossy();
         let display_path = match home::home_dir() {
@@ -68,46 +66,49 @@ pub fn read_command_line(historys: &[String]) -> Result<String, ReadLineError> {
         execute!(stdout, cursor::MoveToColumn(cursor_col as u16))?;
         stdout.flush()?;
 
-        if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
+        if let Event::Key(KeyEvent {
+            code, modifiers, ..
+        }) = event::read()?
+        {
             match code {
                 KeyCode::Enter => {
                     break;
-                },
+                }
                 KeyCode::Char('l' | 'L') if modifiers.contains(KeyModifiers::CONTROL) => {
                     execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0, 0))?;
                     stdout.flush()?;
-                },
+                }
                 KeyCode::Char('c' | 'C') if modifiers.contains(KeyModifiers::CONTROL) => {
                     terminal::disable_raw_mode()?;
                     println!("^C");
                     return Err(ReadLineError::Interrupted);
-                },
+                }
                 KeyCode::Char('u' | 'U') if modifiers.contains(KeyModifiers::CONTROL) => {
                     buffer.drain(0..position);
                     position = 0;
-                },
+                }
                 KeyCode::Char(c) => {
                     buffer.insert(position, c);
                     position += 1;
-                },
+                }
                 KeyCode::Backspace => {
                     if position > 0 {
                         position -= 1;
                         buffer.remove(position);
                     }
-                },
+                }
                 KeyCode::Delete => {
                     if position < buffer.len() {
                         buffer.remove(position);
                     }
-                },
+                }
                 KeyCode::Up => {
                     if history_index > 0 {
                         history_index -= 1;
                         buffer = historys[history_index].chars().collect();
                         position = buffer.len();
                     }
-                },
+                }
                 KeyCode::Down => {
                     if history_index < historys.len() {
                         history_index += 1;
@@ -118,23 +119,23 @@ pub fn read_command_line(historys: &[String]) -> Result<String, ReadLineError> {
                         }
                         position = buffer.len();
                     }
-                },
+                }
                 KeyCode::Left => {
                     if position > 0 {
                         position -= 1;
                     }
-                },
+                }
                 KeyCode::Right => {
                     if position < buffer.len() {
                         position += 1;
                     }
-                },
+                }
                 KeyCode::Home => {
                     position = 0;
-                },
+                }
                 KeyCode::End => {
                     position = buffer.len();
-                },
+                }
                 _ => {}
             }
         }
